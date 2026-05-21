@@ -98,36 +98,46 @@ async def _execute_job(pool: asyncpg.Pool, job_id: str, queries: list[dict] | No
             )
             queries = [dict(r) for r in rows]
 
-        await _update_job(pool, job_id, phase="searching", total=len(queries))
+        # Разворачиваем каждый запрос в 3 источника: telegram + youtube + seo
+        expanded: list[dict] = []
+        for q in queries:
+            geo = q.get("geo", "all")
+            text = q["query_text"]
+            for source_type in ["telegram", "youtube", "seo"]:
+                expanded.append({**q, "source_type": source_type, "geo": geo, "query_text": text})
+
+        await _update_job(pool, job_id, phase="searching", total=len(expanded))
 
         all_channels: list[dict] = []
 
-        # 3. Поиск через Serper
-        for i, q in enumerate(queries):
+        # 3. Поиск через Serper по всем источникам
+        for i, q in enumerate(expanded):
             try:
-                data = await serper.search(
-                    q["query_text"], q["source_type"], q.get("geo", "all"), q.get("language", "en")
-                )
-                source_type = q["source_type"]
+                # Для каждого источника ищем на всех языках (en + ar)
+                for lang in ["en", "ar"]:
+                    data = await serper.search(
+                        q["query_text"], q["source_type"], q.get("geo", "all"), lang
+                    )
+                    source_type = q["source_type"]
 
-                if source_type == "telegram":
-                    parsed = telegram.parse_serper_results(data, q.get("language", "en"), q.get("geo", "all"))
-                elif source_type == "youtube":
-                    parsed = youtube.parse_serper_results(data, q.get("language", "en"), q.get("geo", "all"))
-                else:
-                    parsed = web.parse_serper_results(data, q.get("language", "en"), q.get("geo", "all"))
+                    if source_type == "telegram":
+                        parsed = telegram.parse_serper_results(data, lang, q.get("geo", "all"))
+                    elif source_type == "youtube":
+                        parsed = youtube.parse_serper_results(data, lang, q.get("geo", "all"))
+                    else:
+                        parsed = web.parse_serper_results(data, lang, q.get("geo", "all"))
 
-                all_channels.extend(parsed)
+                    all_channels.extend(parsed)
 
-                # Обновляем статус запроса в очереди
-                if "id" in q:
+                # Обновляем статус запроса в очереди (только для оригинальных, не expanded)
+                if "id" in q and q["source_type"] == "telegram":
                     await pool.execute(
-                        "UPDATE query_queue SET status='done', last_run_at=NOW(), result_count=$1 WHERE id=$2",
-                        len(parsed), q["id"]
+                        "UPDATE query_queue SET status='done', last_run_at=NOW() WHERE id=$1",
+                        q["id"]
                     )
 
             except Exception as e:
-                logger.error(f"Search error for query '{q['query_text']}': {e}")
+                logger.error(f"Search error for query '{q['query_text']}' [{q['source_type']}]: {e}")
 
             await _update_job(pool, job_id, processed=i + 1)
 

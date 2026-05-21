@@ -7,9 +7,7 @@ router = APIRouter(prefix="/api/queries", tags=["queries"])
 
 class QueryCreate(BaseModel):
     query_text: str
-    source_type: str
     geo: str = "all"
-    language: str = "en"
 
 
 @router.get("")
@@ -25,10 +23,10 @@ async def create_query(body: QueryCreate):
     row = await pool.fetchrow(
         """
         INSERT INTO query_queue (query_text, source_type, geo, language)
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, 'all', $2, 'all')
         RETURNING *
         """,
-        body.query_text, body.source_type, body.geo, body.language,
+        body.query_text, body.geo,
     )
     return dict(row)
 

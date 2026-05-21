@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, RotateCcw } from 'lucide-react'
 import { api } from '../api/client'
 
-const SOURCE_TYPES = ['telegram', 'youtube', 'seo']
 const GEOS = ['all', 'egypt', 'morocco', 'algeria', 'tunisia', 'libya']
-const LANGS = ['en', 'ar', 'fr']
 
 const STATUS_COLOR = {
   pending: 'text-yellow-400',
@@ -15,7 +13,8 @@ const STATUS_COLOR = {
 
 export default function QueryManager() {
   const [queries, setQueries] = useState([])
-  const [form, setForm] = useState({ query_text: '', source_type: 'telegram', geo: 'all', language: 'en' })
+  const [form, setForm] = useState({ query_text: '', geo: 'all' })
+  // source_type и language определяются автоматически по тексту запроса на бэке
   const [loading, setLoading] = useState(false)
 
   const load = () => api.getQueries().then(setQueries).catch(() => {})
@@ -58,24 +57,10 @@ export default function QueryManager() {
         />
         <select
           className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none"
-          value={form.source_type}
-          onChange={e => setForm(f => ({ ...f, source_type: e.target.value }))}
-        >
-          {SOURCE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select
-          className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none"
           value={form.geo}
           onChange={e => setForm(f => ({ ...f, geo: e.target.value }))}
         >
           {GEOS.map(g => <option key={g} value={g}>{g}</option>)}
-        </select>
-        <select
-          className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none"
-          value={form.language}
-          onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
-        >
-          {LANGS.map(l => <option key={l} value={l}>{l}</option>)}
         </select>
         <button
           onClick={add}
@@ -97,7 +82,7 @@ export default function QueryManager() {
               {q.status}
             </span>
             <span className="text-gray-300 flex-1 truncate">{q.query_text}</span>
-            <span className="text-xs text-gray-600 flex-shrink-0">{q.source_type} · {q.geo} · {q.language}</span>
+            <span className="text-xs text-gray-600 flex-shrink-0">{q.geo}</span>
             {q.result_count > 0 && (
               <span className="text-xs text-gray-500">{q.result_count} found</span>
             )}
