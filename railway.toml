@@ -2,5 +2,6 @@
 builder = "dockerfile"
 
 [deploy]
+preDeployCommand = "cd backend && python -m db.migrations"
 healthcheckPath = "/api/channels/stats"
 restartPolicyType = "on_failure"
