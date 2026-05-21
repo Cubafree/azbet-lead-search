@@ -11,6 +11,7 @@ from db.pool import get_pool, close_pool
 from api.channels import router as channels_router
 from api.jobs import router as jobs_router
 from api.queries import router as queries_router
+from api.agent import router as agent_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(channels_router)
 app.include_router(jobs_router)
 app.include_router(queries_router)
+app.include_router(agent_router)
 
 # Отдаём React билд в продакшне
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")

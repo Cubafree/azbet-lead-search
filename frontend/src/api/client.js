@@ -29,6 +29,11 @@ export const api = {
   getJobStatus: (jobId) => request(`/api/jobs/status/${jobId}`),
   getLatestJob: () => request('/api/jobs/latest'),
 
+  // Autonomous agent
+  runAgent: (geo = 'all') => request('/api/agent/run', {
+    method: 'POST', body: JSON.stringify({ geo }),
+  }),
+
   // Queries
   getQueries: () => request('/api/queries'),
   createQuery: (body) => request('/api/queries', { method: 'POST', body: JSON.stringify(body) }),

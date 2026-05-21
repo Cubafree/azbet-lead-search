@@ -55,5 +55,18 @@ export function useJob() {
     }
   }
 
-  return { job, running, triggerJob }
+  async function triggerAgent(geo = 'all') {
+    setRunning(true)
+    setJob({ status: 'running', phase: 'generating_queries', processed: 0, total: 0, new_found: 0 })
+    try {
+      const { job_id } = await api.runAgent(geo)
+      startPolling(job_id)
+    } catch (e) {
+      setRunning(false)
+      setJob(null)
+      throw e
+    }
+  }
+
+  return { job, running, triggerJob, triggerAgent }
 }

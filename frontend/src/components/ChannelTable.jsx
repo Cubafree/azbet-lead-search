@@ -81,7 +81,12 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
                 {PLATFORM_ICON[ch.platform] ?? '📌'} {ch.platform}
               </span>
 
-              <span className="text-sm text-gray-300">{fmt(ch.followers)}</span>
+              <span className="text-sm text-gray-300">
+                {ch.platform === 'web' && ch.estimated_monthly_visits
+                  ? <span title="Est. monthly visits">{fmt(ch.estimated_monthly_visits)}/mo</span>
+                  : fmt(ch.followers)
+                }
+              </span>
 
               <span className="text-xs text-gray-400">{ch.geo_focus || '—'}</span>
 
@@ -145,6 +150,22 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
                   </div>
                 </div>
 
+                {/* Traffic estimate (web only) */}
+                {ch.platform === 'web' && ch.estimated_monthly_visits && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Est. Monthly Traffic</p>
+                    <p className="text-sm text-teal-400 font-medium">{fmt(ch.estimated_monthly_visits)} visits/mo</p>
+                  </div>
+                )}
+
+                {/* Traffic estimate (web only) */}
+                {ch.platform === 'web' && ch.estimated_monthly_visits && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Est. Monthly Traffic</p>
+                    <p className="text-sm text-teal-400 font-medium">{fmt(ch.estimated_monthly_visits)} visits/mo</p>
+                  </div>
+                )}
+
                 {/* Competitor info */}
                 <div>
                   <p className="text-xs text-gray-500 mb-2">Competitor signals</p>
@@ -156,6 +177,24 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
                     <p className="text-xs text-red-400 mt-1">Promo: {ch.competitor_promo}</p>
                   )}
                 </div>
+
+                {/* Outreach draft */}
+                {ch.outreach_draft && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-gray-500">Outreach Draft</p>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(ch.outreach_draft)}
+                        className="text-xs text-gray-500 hover:text-blue-400 transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <pre className="text-xs text-gray-300 bg-gray-800/60 rounded-lg p-3 whitespace-pre-wrap font-sans leading-relaxed border border-gray-700/50">
+                      {ch.outreach_draft}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
           </div>

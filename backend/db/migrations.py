@@ -79,6 +79,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     finished_at TIMESTAMPTZ
 );
 
+-- Estimated monthly visits (for web, AI-generated)
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS estimated_monthly_visits BIGINT;
+
+-- Outreach email draft (AI-generated for high/medium priority leads)
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS outreach_draft TEXT;
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_channels_platform    ON channels(platform);
 CREATE INDEX IF NOT EXISTS idx_channels_priority    ON channels(priority);

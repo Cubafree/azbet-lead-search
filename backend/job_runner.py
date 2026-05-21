@@ -12,6 +12,9 @@ import asyncpg
 from db.pool import get_pool
 from scrapers import serper, telegram, youtube, web
 from enrichers import ai_qualify
+from agents.query_generator import generate_queries
+from agents.mena_filter import is_mena_relevant
+from agents.email_drafter import draft_email
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +55,14 @@ async def _upsert_channel(pool: asyncpg.Pool, ch: dict) -> bool:
             contact_email, contact_telegram, contact_other,
             language, geo_focus, niche, priority,
             mentioned_competitors, competitor_promo, ai_summary,
+            estimated_monthly_visits, outreach_draft,
             last_scraped_at
         ) VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9,
             $10, $11, $12, $13,
             $14, $15, $16,
+            $17, $18,
             NOW()
         )
         ON CONFLICT (platform, handle) DO NOTHING
@@ -67,6 +72,7 @@ async def _upsert_channel(pool: asyncpg.Pool, ch: dict) -> bool:
         ch.get("contact_email"), ch.get("contact_telegram"), ch.get("contact_other"),
         ch.get("language"), ch.get("geo_focus"), ch.get("niche"), ch.get("priority"),
         ch.get("mentioned_competitors"), ch.get("competitor_promo"), ch.get("ai_summary"),
+        ch.get("estimated_monthly_visits"), ch.get("outreach_draft"),
     )
     return result == "INSERT 0 1"
 
@@ -192,6 +198,146 @@ async def _execute_job(pool: asyncpg.Pool, job_id: str, queries: list[dict] | No
 
     except Exception as e:
         logger.exception(f"Job {job_id} failed: {e}")
+        await _update_job(pool, job_id, status="error", error_msg=str(e))
+
+
+async def run_autonomous_job(geo: str = "all") -> str:
+    """
+    Полностью автономный режим:
+    1. OpenAI генерирует поисковые запросы
+    2. Serper ищет по всем источникам и языкам
+    3. MENA-фильтр отсекает нерелевантные каналы
+    4. AI-квалификация + черновик письма для high/medium лидов
+    """
+    pool = await get_pool()
+    job_id = await _create_job(pool)
+    logger.info(f"Autonomous job {job_id} started for geo={geo}")
+    asyncio.create_task(_execute_autonomous_job(pool, job_id, geo))
+    return job_id
+
+
+async def _execute_autonomous_job(pool, job_id: str, geo: str):
+    try:
+        # 1. Генерируем запросы через OpenAI
+        await _update_job(pool, job_id, phase="generating_queries")
+        queries = await generate_queries(geo)
+        logger.info(f"Job {job_id}: generated {len(queries)} queries for geo={geo}")
+
+        # 2. Записываем запросы в query_queue для отображения в UI
+        for q in queries:
+            try:
+                await pool.execute(
+                    """INSERT INTO query_queue (query_text, source_type, geo, language, status)
+                       VALUES ($1, 'all', $2, 'all', 'running')
+                       ON CONFLICT DO NOTHING""",
+                    q["query_text"], q.get("geo", geo),
+                )
+            except Exception:
+                pass
+
+        # 3. Загружаем известные хендлы
+        known = await _load_known_handles(pool)
+
+        # 4. Разворачиваем в источники
+        expanded: list[dict] = []
+        for q in queries:
+            for source_type in ["telegram", "youtube", "seo"]:
+                expanded.append({**q, "source_type": source_type})
+
+        await _update_job(pool, job_id, phase="searching", total=len(expanded))
+
+        all_channels: list[dict] = []
+        for i, q in enumerate(expanded):
+            try:
+                for lang in ["en", "ar"]:
+                    data = await serper.search(
+                        q["query_text"], q["source_type"], q.get("geo", geo), lang
+                    )
+                    source_type = q["source_type"]
+                    if source_type == "telegram":
+                        parsed = telegram.parse_serper_results(data, lang, q.get("geo", geo))
+                    elif source_type == "youtube":
+                        parsed = youtube.parse_serper_results(data, lang, q.get("geo", geo))
+                    else:
+                        parsed = web.parse_serper_results(data, lang, q.get("geo", geo))
+                    all_channels.extend(parsed)
+            except Exception as e:
+                logger.error(f"Search error [{q['source_type']}] '{q['query_text']}': {e}")
+            await _update_job(pool, job_id, processed=i + 1)
+
+        # 5. Дедуп
+        unique_channels = []
+        seen: set[tuple[str, str]] = set()
+        for ch in all_channels:
+            key = (ch["platform"], ch["handle"])
+            if key in known or key in seen:
+                continue
+            seen.add(key)
+            unique_channels.append(ch)
+
+        logger.info(f"Job {job_id}: {len(unique_channels)} unique channels after dedup")
+
+        # 6. MENA pre-filter
+        mena_channels = [ch for ch in unique_channels if is_mena_relevant(ch)]
+        filtered_out = len(unique_channels) - len(mena_channels)
+        logger.info(f"Job {job_id}: MENA filter removed {filtered_out}, kept {len(mena_channels)}")
+
+        await _update_job(pool, job_id, phase="enriching", total=len(mena_channels), processed=0)
+
+        new_count = 0
+        for i, ch in enumerate(mena_channels):
+            try:
+                # Обогащение
+                enriched = await _enrich(ch)
+                ch.update({k: v for k, v in enriched.items() if v is not None})
+
+                # AI квалификация
+                await _update_job(pool, job_id, phase="qualifying")
+                qual = await ai_qualify.qualify(ch)
+                ch.update(qual)
+
+                # MENA check после AI qualify — отсекаем если AI определил не-MENA
+                ai_geo = (ch.get("geo_focus") or "").lower()
+                if ai_geo and ai_geo not in {
+                    "egypt", "morocco", "algeria", "tunisia", "libya",
+                    "mena", "arab", "maghreb", "null", ""
+                }:
+                    logger.debug(f"Post-qualify MENA filter: skip {ch.get('handle')} geo={ai_geo}")
+                    continue
+
+                # Черновик письма для high/medium лидов
+                if ch.get("priority") in ("high", "medium"):
+                    draft = await draft_email(ch)
+                    if draft:
+                        ch["outreach_draft"] = draft
+
+                # Сохраняем
+                inserted = await _upsert_channel(pool, ch)
+                if inserted:
+                    new_count += 1
+                    known.add((ch["platform"], ch["handle"]))
+
+            except Exception as e:
+                logger.error(f"Enrich/qualify error for {ch.get('handle')}: {e}")
+
+            await _update_job(pool, job_id, processed=i + 1, new_found=new_count)
+            await asyncio.sleep(0.3)
+
+        # Помечаем запросы как выполненные
+        await pool.execute(
+            "UPDATE query_queue SET status='done', last_run_at=NOW() WHERE status='running'"
+        )
+
+        await _update_job(
+            pool, job_id,
+            status="done", phase="done",
+            new_found=new_count,
+            finished_at=datetime.now(timezone.utc),
+        )
+        logger.info(f"Autonomous job {job_id} done. New channels: {new_count}")
+
+    except Exception as e:
+        logger.exception(f"Autonomous job {job_id} failed: {e}")
         await _update_job(pool, job_id, status="error", error_msg=str(e))
 
 
