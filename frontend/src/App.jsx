@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Bot, RefreshCw, Zap } from 'lucide-react'
+import { Bot, RefreshCw, Zap, Sparkles } from 'lucide-react'
+import { api } from './api/client'
 import StatCards from './components/StatCards'
 import JobBar from './components/JobBar'
 import Filters from './components/Filters'
@@ -23,6 +24,8 @@ export default function App() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [tab, setTab] = useState('leads')
   const [agentGeo, setAgentGeo] = useState('all')
+  const [enriching, setEnriching] = useState(false)
+  const [enrichJob, setEnrichJob] = useState(null)
 
   const { items, total, loading, refetch } = useChannels(filters)
   const { job, running, triggerAgent } = useJob()
@@ -32,6 +35,29 @@ export default function App() {
       await triggerAgent(agentGeo)
     } catch (e) {
       alert(`Failed to start agent: ${e.message}`)
+    }
+  }
+
+  async function handleEnrich() {
+    setEnriching(true)
+    try {
+      const { job_id } = await api.runEnrich()
+      setEnrichJob({ id: job_id, status: 'running' })
+      // Poll until done
+      const poll = setInterval(async () => {
+        try {
+          const j = await api.getJobStatus(job_id)
+          setEnrichJob(j)
+          if (j.status !== 'running') {
+            clearInterval(poll)
+            setEnriching(false)
+            if (j.status === 'done') refetch()
+          }
+        } catch { clearInterval(poll); setEnriching(false) }
+      }, 2500)
+    } catch (e) {
+      setEnriching(false)
+      alert(`Enrich failed: ${e.message}`)
     }
   }
 
@@ -45,12 +71,25 @@ export default function App() {
             <h1 className="text-xl font-bold text-white">AzBet Lead Search</h1>
             <p className="text-xs text-gray-500 mt-0.5">Affiliate channel discovery · MENA</p>
           </div>
-          <button
-            onClick={refetch}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 rounded-lg"
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleEnrich}
+              disabled={enriching || running}
+              title="Deep contact search + generate email drafts for non-archived leads without contacts"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-violet-700 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium"
+            >
+              <Sparkles size={14} />
+              {enriching
+                ? `Enriching… ${enrichJob?.processed ?? 0}/${enrichJob?.total ?? '?'}`
+                : 'Enrich Leads'}
+            </button>
+            <button
+              onClick={refetch}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 rounded-lg"
+            >
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
         </div>
 
         {/* Agent Control Panel */}
@@ -140,6 +179,7 @@ export default function App() {
                   total={total}
                   filters={filters}
                   onFilterChange={setFilters}
+                  onArchiveChange={refetch}
                 />
             }
           </>

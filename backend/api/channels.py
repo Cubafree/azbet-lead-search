@@ -11,6 +11,7 @@ async def list_channels(
     geo_focus: str | None = Query(None),
     niche: str | None = Query(None),
     search: str | None = Query(None),
+    show_archived: bool = Query(False),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
 ):
@@ -19,6 +20,10 @@ async def list_channels(
     conditions = ["1=1"]
     params: list = []
     p = 1
+
+    # По умолчанию скрываем архивные
+    if not show_archived:
+        conditions.append("is_archived = FALSE")
 
     if platform:
         conditions.append(f"platform = ${p}")
@@ -63,8 +68,11 @@ async def list_channels(
 @router.patch("/{channel_id}")
 async def update_channel(channel_id: str, body: dict):
     pool = await get_pool()
-    allowed = {"priority", "status", "niche", "geo_focus", "contact_email",
-               "contact_telegram", "contact_other", "affiliate_id"}
+    allowed = {
+        "priority", "niche", "geo_focus",
+        "contact_email", "contact_telegram", "contact_other",
+        "affiliate_id", "is_archived",
+    }
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         return {"ok": False, "error": "no valid fields"}
@@ -72,23 +80,41 @@ async def update_channel(channel_id: str, body: dict):
     sets = ", ".join(f"{k} = ${i+2}" for i, k in enumerate(updates))
     await pool.execute(
         f"UPDATE channels SET {sets} WHERE id = $1",
-        channel_id, *updates.values()
+        channel_id, *updates.values(),
     )
+    return {"ok": True}
+
+
+@router.post("/{channel_id}/archive")
+async def archive_channel(channel_id: str):
+    pool = await get_pool()
+    await pool.execute("UPDATE channels SET is_archived = TRUE WHERE id = $1", channel_id)
+    return {"ok": True}
+
+
+@router.post("/{channel_id}/unarchive")
+async def unarchive_channel(channel_id: str):
+    pool = await get_pool()
+    await pool.execute("UPDATE channels SET is_archived = FALSE WHERE id = $1", channel_id)
     return {"ok": True}
 
 
 @router.get("/stats")
 async def stats():
     pool = await get_pool()
-    total = await pool.fetchval("SELECT COUNT(*) FROM channels")
+    total = await pool.fetchval("SELECT COUNT(*) FROM channels WHERE is_archived = FALSE")
+    archived = await pool.fetchval("SELECT COUNT(*) FROM channels WHERE is_archived = TRUE")
     by_platform = await pool.fetch(
-        "SELECT platform, COUNT(*) as cnt FROM channels GROUP BY platform ORDER BY cnt DESC"
+        "SELECT platform, COUNT(*) as cnt FROM channels WHERE is_archived = FALSE "
+        "GROUP BY platform ORDER BY cnt DESC"
     )
     by_priority = await pool.fetch(
-        "SELECT priority, COUNT(*) as cnt FROM channels GROUP BY priority"
+        "SELECT priority, COUNT(*) as cnt FROM channels WHERE is_archived = FALSE "
+        "GROUP BY priority"
     )
     return {
         "total": total,
+        "archived": archived,
         "by_platform": [dict(r) for r in by_platform],
         "by_priority": [dict(r) for r in by_priority],
     }

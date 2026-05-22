@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ExternalLink, Mail, MessageCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, Mail, MessageCircle, ChevronDown, ChevronUp, Archive, ArchiveRestore } from 'lucide-react'
+import { api } from '../api/client'
 
 const PRIORITY_BADGE = {
   high:   'bg-emerald-900 text-emerald-300 border-emerald-700',
@@ -22,8 +23,23 @@ function fmt(n) {
   return n.toLocaleString()
 }
 
-export default function ChannelTable({ items, total, filters, onFilterChange }) {
+export default function ChannelTable({ items, total, filters, onFilterChange, onArchiveChange }) {
   const [expanded, setExpanded] = useState(null)
+  const [archiving, setArchiving] = useState(null)
+
+  async function toggleArchive(ch) {
+    setArchiving(ch.id)
+    try {
+      if (ch.is_archived) {
+        await api.unarchiveChannel(ch.id)
+      } else {
+        await api.archiveChannel(ch.id)
+      }
+      onArchiveChange?.()
+    } finally {
+      setArchiving(null)
+    }
+  }
 
   const page = Math.floor((filters.offset || 0) / (filters.limit || 50))
   const pageSize = filters.limit || 50
@@ -36,13 +52,14 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
 
       <div className="rounded-xl border border-gray-800 overflow-hidden">
         {/* Header row */}
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-2 bg-gray-900 text-xs text-gray-500 border-b border-gray-800">
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 bg-gray-900 text-xs text-gray-500 border-b border-gray-800">
           <span>Channel</span>
           <span>Platform</span>
           <span>Followers</span>
           <span>Geo</span>
           <span>Niche</span>
           <span>Priority</span>
+          <span className="w-6" />
         </div>
 
         {items.length === 0 && (
@@ -53,7 +70,7 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
           <div key={ch.id}>
             {/* Main row */}
             <div
-              className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-gray-800/60 hover:bg-gray-900/50 cursor-pointer items-center"
+              className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-gray-800/60 hover:bg-gray-900/50 cursor-pointer items-center ${ch.is_archived ? 'opacity-50' : ''}`}
               onClick={() => setExpanded(expanded === ch.id ? null : ch.id)}
             >
               {/* Name + handle */}
@@ -92,7 +109,7 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
 
               <span className="text-xs text-gray-400">{ch.niche || '—'}</span>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${PRIORITY_BADGE[ch.priority] ?? PRIORITY_BADGE.low}`}>
                   {ch.priority || 'unrated'}
                 </span>
@@ -101,6 +118,23 @@ export default function ChannelTable({ items, total, filters, onFilterChange }) 
                   : <ChevronDown size={14} className="text-gray-500" />
                 }
               </div>
+
+              {/* Archive button */}
+              <button
+                onClick={e => { e.stopPropagation(); toggleArchive(ch) }}
+                disabled={archiving === ch.id}
+                title={ch.is_archived ? 'Unarchive' : 'Archive'}
+                className={`flex-shrink-0 p-1 rounded transition-colors ${
+                  ch.is_archived
+                    ? 'text-orange-500 hover:text-orange-300'
+                    : 'text-gray-600 hover:text-orange-400'
+                } disabled:opacity-40`}
+              >
+                {ch.is_archived
+                  ? <ArchiveRestore size={14} />
+                  : <Archive size={14} />
+                }
+              </button>
             </div>
 
             {/* Expanded detail */}

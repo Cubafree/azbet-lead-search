@@ -14,7 +14,6 @@ from scrapers import serper, telegram, youtube, web
 from enrichers import ai_qualify
 from agents.query_generator import generate_queries
 from agents.mena_filter import is_mena_relevant
-from agents.email_drafter import draft_email
 
 logger = logging.getLogger(__name__)
 
@@ -305,13 +304,7 @@ async def _execute_autonomous_job(pool, job_id: str, geo: str):
                     logger.debug(f"Post-qualify MENA filter: skip {ch.get('handle')} geo={ai_geo}")
                     continue
 
-                # Черновик письма для high/medium лидов
-                if ch.get("priority") in ("high", "medium"):
-                    draft = await draft_email(ch)
-                    if draft:
-                        ch["outreach_draft"] = draft
-
-                # Сохраняем
+                # Сохраняем (черновик письма генерится отдельно через Enrich Leads)
                 inserted = await _upsert_channel(pool, ch)
                 if inserted:
                     new_count += 1

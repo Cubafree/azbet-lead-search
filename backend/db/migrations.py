@@ -85,6 +85,9 @@ ALTER TABLE channels ADD COLUMN IF NOT EXISTS estimated_monthly_visits BIGINT;
 -- Outreach email draft (AI-generated for high/medium priority leads)
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS outreach_draft TEXT;
 
+-- Archive flag — скрывает лид из выборки и энрича
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_channels_platform    ON channels(platform);
 CREATE INDEX IF NOT EXISTS idx_channels_priority    ON channels(priority);
