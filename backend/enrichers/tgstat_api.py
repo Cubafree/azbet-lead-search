@@ -37,21 +37,16 @@ async def enrich_channel(handle: str) -> dict:
 
         item = data.get("response", {})
 
-        if item.get("subscribers_count"):
-            result["followers"] = item["subscribers_count"]
-        if item.get("description"):
-            result["description"] = item["description"][:1000]
+        # Correct field names per TGStat API docs
+        if item.get("participants_count"):
+            result["followers"] = item["participants_count"]
+        if item.get("about"):
+            result["description"] = item["about"][:1000]
 
-        # TGStat sometimes exposes contact info for verified channels
-        contact = item.get("contact_info") or {}
-        if contact.get("email"):
-            result["contact_email"] = contact["email"]
-        if contact.get("phone"):
-            result["contact_other"] = contact["phone"]
-
-        # username of linked account/admin
-        if item.get("username") and item["username"].lower() != handle.lower():
-            result["contact_telegram"] = item["username"]
+        # username — strip leading @ if present
+        username = (item.get("username") or "").lstrip("@")
+        if username and username.lower() != handle.lower():
+            result["contact_telegram"] = username
 
     except Exception as e:
         logger.debug("TGStat enrich failed for %s: %s", handle, e)
