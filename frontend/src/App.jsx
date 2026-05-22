@@ -17,6 +17,7 @@ const PHASE_LABEL = {
   searching:          '🔍 Searching…',
   enriching:          '⚡ Enriching channels…',
   qualifying:         '🧠 AI qualifying…',
+  deep_enriching:     '🔬 Deep contact search…',
   done:               '✅ Done',
 }
 

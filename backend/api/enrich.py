@@ -1,6 +1,6 @@
 """
 Batch enrichment: глубокий поиск контактов + генерация писем.
-POST /api/enrich/run  — запускает фоновый джоб
+POST /api/enrich/run  — запускает фоновый джоб (для старых лидов без контактов)
 """
 import asyncio
 import logging
@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from db.pool import get_pool
-from enrichers import telegram_deep, tgstat_api, youtube_api, contact_search
+from enrichers.pipeline import deep_enrich
 from agents.email_drafter import draft_email
 
 logger = logging.getLogger(__name__)
@@ -39,14 +39,12 @@ async def _execute_enrich(pool, job_id: str, channel_ids: list[str] | None):
         await pool.execute(f"UPDATE jobs SET {sets} WHERE id = $1", job_id, *kw.values())
 
     try:
-        # Fetch channels to enrich
         if channel_ids:
             rows = await pool.fetch(
                 "SELECT * FROM channels WHERE id = ANY($1::uuid[]) AND is_archived = FALSE",
                 channel_ids,
             )
         else:
-            # Все не-архивные без контактов
             rows = await pool.fetch(
                 """SELECT * FROM channels
                    WHERE is_archived = FALSE
@@ -61,17 +59,16 @@ async def _execute_enrich(pool, job_id: str, channel_ids: list[str] | None):
 
         channels = [dict(r) for r in rows]
         total = len(channels)
-        logger.info("Enrich job %s: %d channels to process", job_id, total)
+        logger.info("Enrich job %s: %d channels", job_id, total)
         await upd(phase="enriching", total=total, processed=0)
 
         for i, ch in enumerate(channels):
             try:
-                merged = await _deep_enrich(ch)
+                merged = await deep_enrich(ch)
                 if merged:
                     await _update_channel_contacts(pool, ch["id"], merged)
                     ch.update({k: v for k, v in merged.items() if v})
 
-                # Generate email draft if high/medium and not already drafted
                 if ch.get("priority") in ("high", "medium") and not ch.get("outreach_draft"):
                     draft = await draft_email(ch)
                     if draft:
@@ -79,54 +76,18 @@ async def _execute_enrich(pool, job_id: str, channel_ids: list[str] | None):
                             "UPDATE channels SET outreach_draft = $1 WHERE id = $2",
                             draft, ch["id"],
                         )
-
             except Exception as e:
                 logger.error("Enrich error for %s: %s", ch.get("handle"), e)
 
             await upd(processed=i + 1)
             await asyncio.sleep(0.5)
 
-        await upd(
-            status="done", phase="done",
-            finished_at=datetime.now(timezone.utc),
-        )
+        await upd(status="done", phase="done", finished_at=datetime.now(timezone.utc))
         logger.info("Enrich job %s done", job_id)
 
     except Exception as e:
         logger.exception("Enrich job %s failed: %s", job_id, e)
         await upd(status="error", error_msg=str(e))
-
-
-async def _deep_enrich(ch: dict) -> dict:
-    """Run all available enrichers for a channel, return merged results."""
-    platform = ch.get("platform", "")
-    handle = ch.get("handle", "")
-    url = ch.get("url", "")
-    result: dict = {}
-
-    if platform == "telegram":
-        # 1. Telethon (get admins, scan messages)
-        r = await telegram_deep.enrich_channel(handle)
-        result.update({k: v for k, v in r.items() if v})
-
-        # 2. TGStat (subscribers + sometimes contact)
-        if not result.get("contact_email"):
-            r = await tgstat_api.enrich_channel(handle)
-            result.update({k: v for k, v in r.items() if v and k not in result})
-
-    elif platform == "youtube":
-        # YouTube Data API
-        channel_id = ch.get("handle", "")
-        r = await youtube_api.enrich_channel(channel_id, url)
-        result.update({k: v for k, v in r.items() if v})
-
-    # Cross-search via Serper for any platform without contacts after above
-    has_contact = result.get("contact_email") or result.get("contact_telegram") or result.get("contact_other")
-    if not has_contact:
-        r = await contact_search.find_contacts(ch)
-        result.update({k: v for k, v in r.items() if v})
-
-    return result
 
 
 async def _update_channel_contacts(pool, channel_id: str, data: dict):

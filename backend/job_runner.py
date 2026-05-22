@@ -14,6 +14,8 @@ from scrapers import serper, telegram, youtube, web
 from enrichers import ai_qualify
 from agents.query_generator import generate_queries
 from agents.mena_filter import is_mena_relevant
+from agents.email_drafter import draft_email
+from enrichers.pipeline import deep_enrich, discover_cross_platform
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +306,35 @@ async def _execute_autonomous_job(pool, job_id: str, geo: str):
                     logger.debug(f"Post-qualify MENA filter: skip {ch.get('handle')} geo={ai_geo}")
                     continue
 
-                # Сохраняем (черновик письма генерится отдельно через Enrich Leads)
+                # Для high/medium — сразу глубокий энрич + письмо
+                if ch.get("priority") in ("high", "medium"):
+                    await _update_job(pool, job_id, phase="deep_enriching")
+                    try:
+                        deep = await deep_enrich(ch)
+                        ch.update({k: v for k, v in deep.items() if v is not None})
+                    except Exception as e:
+                        logger.warning(f"Deep enrich failed for {ch.get('handle')}: {e}")
+
+                    try:
+                        draft = await draft_email(ch)
+                        if draft:
+                            ch["outreach_draft"] = draft
+                    except Exception as e:
+                        logger.warning(f"Email draft failed for {ch.get('handle')}: {e}")
+
+                    # Cross-platform discovery
+                    try:
+                        cross = await discover_cross_platform(ch, geo)
+                        for xch in cross:
+                            xch.pop("_discovered_from", None)
+                            key = (xch.get("platform"), xch.get("handle"))
+                            if key[1] and key not in known and key not in seen:
+                                seen.add(key)
+                                mena_channels.append(xch)   # добавляем в очередь
+                    except Exception as e:
+                        logger.warning(f"Cross-platform failed for {ch.get('handle')}: {e}")
+
+                # Сохраняем
                 inserted = await _upsert_channel(pool, ch)
                 if inserted:
                     new_count += 1
