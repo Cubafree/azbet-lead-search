@@ -26,6 +26,7 @@ function fmt(n) {
 export default function ChannelTable({ items, total, filters, onFilterChange, onArchiveChange }) {
   const [expanded, setExpanded] = useState(null)
   const [archiving, setArchiving] = useState(null)
+  const [contacted, setContacted] = useState({})   // local optimistic state
 
   async function toggleArchive(ch) {
     setArchiving(ch.id)
@@ -41,6 +42,18 @@ export default function ChannelTable({ items, total, filters, onFilterChange, on
     }
   }
 
+  async function toggleContacted(e, ch) {
+    e.stopPropagation()
+    const next = !getContacted(ch)
+    setContacted(s => ({ ...s, [ch.id]: next }))
+    await api.setContacted(ch.id, next).catch(() =>
+      setContacted(s => ({ ...s, [ch.id]: !next }))   // rollback on error
+    )
+  }
+
+  const getContacted = (ch) =>
+    ch.id in contacted ? contacted[ch.id] : ch.is_contacted
+
   const page = Math.floor((filters.offset || 0) / (filters.limit || 50))
   const pageSize = filters.limit || 50
   const totalPages = Math.ceil(total / pageSize)
@@ -52,7 +65,8 @@ export default function ChannelTable({ items, total, filters, onFilterChange, on
 
       <div className="rounded-xl border border-gray-800 overflow-hidden">
         {/* Header row */}
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 bg-gray-900 text-xs text-gray-500 border-b border-gray-800">
+        <div className="grid grid-cols-[auto_2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 bg-gray-900 text-xs text-gray-500 border-b border-gray-800">
+          <span className="w-5" title="Contacted">✓</span>
           <span>Channel</span>
           <span>Platform</span>
           <span>Followers</span>
@@ -70,9 +84,18 @@ export default function ChannelTable({ items, total, filters, onFilterChange, on
           <div key={ch.id}>
             {/* Main row */}
             <div
-              className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-gray-800/60 hover:bg-gray-900/50 cursor-pointer items-center ${ch.is_archived ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[auto_2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-gray-800/60 hover:bg-gray-900/50 cursor-pointer items-center ${ch.is_archived ? 'opacity-50' : getContacted(ch) ? 'opacity-60' : ''}`}
               onClick={() => setExpanded(expanded === ch.id ? null : ch.id)}
             >
+              {/* Contacted checkbox */}
+              <input
+                type="checkbox"
+                checked={!!getContacted(ch)}
+                onChange={e => toggleContacted(e, ch)}
+                onClick={e => e.stopPropagation()}
+                title="Mark as contacted"
+                className="w-4 h-4 rounded accent-emerald-500 cursor-pointer flex-shrink-0"
+              />
               {/* Name + handle */}
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">

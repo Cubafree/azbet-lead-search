@@ -34,14 +34,12 @@ export const api = {
     method: 'POST', body: JSON.stringify({ geo }),
   }),
 
-  // Enrich leads (deep contact search + email drafts)
-  runEnrich: (channelIds = null) => request('/api/enrich/run', {
-    method: 'POST', body: JSON.stringify({ channel_ids: channelIds }),
-  }),
-
   // Archive / unarchive
   archiveChannel: (id) => request(`/api/channels/${id}/archive`, { method: 'POST' }),
   unarchiveChannel: (id) => request(`/api/channels/${id}/unarchive`, { method: 'POST' }),
+  setContacted: (id, value) => request(`/api/channels/${id}`, {
+    method: 'PATCH', body: JSON.stringify({ is_contacted: value }),
+  }),
 
   // Queries
   getQueries: () => request('/api/queries'),

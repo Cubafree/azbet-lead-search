@@ -71,7 +71,7 @@ async def update_channel(channel_id: str, body: dict):
     allowed = {
         "priority", "niche", "geo_focus",
         "contact_email", "contact_telegram", "contact_other",
-        "affiliate_id", "is_archived",
+        "affiliate_id", "is_archived", "is_contacted",
     }
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:

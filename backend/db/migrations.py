@@ -88,6 +88,9 @@ ALTER TABLE channels ADD COLUMN IF NOT EXISTS outreach_draft TEXT;
 -- Archive flag — скрывает лид из выборки и энрича
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Contacted flag — менеджер отметил что уже работал с этим лидом
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_contacted BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_channels_platform    ON channels(platform);
 CREATE INDEX IF NOT EXISTS idx_channels_priority    ON channels(priority);
