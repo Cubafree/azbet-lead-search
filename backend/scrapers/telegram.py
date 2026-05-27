@@ -115,12 +115,30 @@ async def enrich_channel(handle: str) -> dict:
         if em:
             contact_email = em.group(0)
 
+    # Дата последнего поста из web-preview (t.me/s/ не грузим повторно — берём из основной)
+    last_post_at = None
+    time_tags = soup.select("time[datetime]")
+    if time_tags:
+        from datetime import datetime, timezone as tz
+        dates = []
+        for t in time_tags:
+            try:
+                dt = datetime.fromisoformat(t.get("datetime", ""))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=tz.utc)
+                dates.append(dt)
+            except ValueError:
+                pass
+        if dates:
+            last_post_at = max(dates)
+
     return {
         "name": name,
         "description": description,
         "followers": followers,
         "contact_telegram": contact_telegram,
         "contact_email": contact_email,
+        "last_post_at": last_post_at,
     }
 
 

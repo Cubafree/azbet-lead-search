@@ -15,6 +15,7 @@ from enrichers import ai_qualify
 from agents.query_generator import generate_queries
 from agents.mena_filter import is_mena_relevant
 from agents.email_drafter import draft_email
+from agents.activity_filter import is_recently_active, fetch_tg_last_post
 from enrichers.pipeline import deep_enrich, discover_cross_platform
 
 logger = logging.getLogger(__name__)
@@ -57,14 +58,14 @@ async def _upsert_channel(pool: asyncpg.Pool, ch: dict) -> bool:
             language, geo_focus, niche, priority,
             mentioned_competitors, competitor_promo, ai_summary,
             estimated_monthly_visits, outreach_draft,
-            last_scraped_at
+            last_post_at, last_scraped_at
         ) VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9,
             $10, $11, $12, $13,
             $14, $15, $16,
             $17, $18,
-            NOW()
+            $19, NOW()
         )
         ON CONFLICT (platform, handle) DO NOTHING
         """,
@@ -74,6 +75,7 @@ async def _upsert_channel(pool: asyncpg.Pool, ch: dict) -> bool:
         ch.get("language"), ch.get("geo_focus"), ch.get("niche"), ch.get("priority"),
         ch.get("mentioned_competitors"), ch.get("competitor_promo"), ch.get("ai_summary"),
         ch.get("estimated_monthly_visits"), ch.get("outreach_draft"),
+        ch.get("last_post_at"),
     )
     return result == "INSERT 0 1"
 
@@ -291,6 +293,15 @@ async def _execute_autonomous_job(pool, job_id: str, geo: str):
                 # Обогащение
                 enriched = await _enrich(ch)
                 ch.update({k: v for k, v in enriched.items() if v is not None})
+
+                # Проверка активности (TG/YT): отсекаем каналы без постов > 14 дней
+                if ch.get("platform") in ("telegram", "youtube"):
+                    # Если enrich не вернул last_post_at — пробуем получить для TG
+                    if ch.get("last_post_at") is None and ch.get("platform") == "telegram":
+                        ch["last_post_at"] = await fetch_tg_last_post(ch.get("handle", ""))
+                    if not is_recently_active(ch):
+                        logger.debug(f"Activity filter: skip inactive {ch.get('handle')}")
+                        continue
 
                 # AI квалификация
                 await _update_job(pool, job_id, phase="qualifying")

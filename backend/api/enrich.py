@@ -93,7 +93,7 @@ async def _execute_enrich(pool, job_id: str, channel_ids: list[str] | None):
 async def _update_channel_contacts(pool, channel_id: str, data: dict):
     allowed = {
         "contact_email", "contact_telegram", "contact_other",
-        "description", "followers", "geo_focus",
+        "description", "followers", "geo_focus", "last_post_at",
     }
     updates = {k: v for k, v in data.items() if k in allowed and v is not None}
     if not updates:

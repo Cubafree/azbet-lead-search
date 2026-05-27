@@ -84,12 +84,17 @@ async def enrich_channel(video_url: str) -> dict:
 
     channel_url = info.get("channel_url") or info.get("uploader_url")
 
+    # Дата последнего видео
+    from agents.activity_filter import parse_yt_upload_date
+    last_post_at = parse_yt_upload_date(info.get("upload_date"))
+
     return {
         "url": channel_url,
         "name": info.get("channel") or info.get("uploader"),
         "followers": followers,
         "description": description[:500] if description else None,
         "contact_email": email_m.group(0) if email_m else None,
+        "last_post_at": last_post_at,
     }
 
 

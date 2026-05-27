@@ -91,6 +91,9 @@ ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAU
 -- Contacted flag — менеджер отметил что уже работал с этим лидом
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_contacted BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Дата последнего поста/видео (для фильтра активности)
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS last_post_at TIMESTAMPTZ;
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_channels_platform    ON channels(platform);
 CREATE INDEX IF NOT EXISTS idx_channels_priority    ON channels(priority);
