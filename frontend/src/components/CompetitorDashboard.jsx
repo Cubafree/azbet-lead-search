@@ -219,11 +219,11 @@ export default function CompetitorDashboard() {
     if (tab === 'insights' && !insights.length) loadInsights()
   }, [tab])
 
-  async function handleScan() {
+  async function handleScan(competitorName = null) {
     setScanning(true)
-    setScanStatus('Scanning…')
+    setScanStatus(competitorName ? `Scanning ${competitorName}…` : 'Scanning all…')
     try {
-      const r = await api.scanCompetitors('all')
+      const r = await api.scanCompetitors('all', competitorName)
       setScanStatus(`✅ Job started: ${r.job_id?.slice(0, 8)}`)
       setTimeout(() => {
         setScanStatus(null)
@@ -248,17 +248,29 @@ export default function CompetitorDashboard() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold text-white">Competitor Intelligence</h2>
-          <p className="text-xs text-gray-500 mt-0.5">MENA affiliate activity · promo codes · overlap with our leads</p>
+          <p className="text-xs text-gray-500 mt-0.5">MENA affiliate activity · promo codes · discovered lead candidates</p>
         </div>
         <div className="flex items-center gap-2">
           {scanStatus && <span className="text-xs text-gray-400">{scanStatus}</span>}
+          {selected && (
+            <button
+              onClick={() => handleScan(selected)}
+              disabled={scanning}
+              title={`Scan only ${selected}`}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 text-gray-300 rounded-lg transition-colors"
+            >
+              <RefreshCw size={13} className={scanning ? 'animate-spin' : ''} />
+              Scan {selected}
+            </button>
+          )}
           <button
-            onClick={handleScan}
+            onClick={() => handleScan(null)}
             disabled={scanning}
+            title="Scan all 6 competitors"
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg transition-colors"
           >
             <RefreshCw size={13} className={scanning ? 'animate-spin' : ''} />
-            {scanning ? 'Scanning…' : 'Scan now'}
+            {scanning ? 'Scanning…' : 'Scan all'}
           </button>
         </div>
       </div>
@@ -310,7 +322,7 @@ export default function CompetitorDashboard() {
         {tab === 'overlap' && (
           <div>
             <p className="text-xs text-gray-500 mb-3">
-              Channels in your lead DB that are promoting competitors — sorted by priority
+              Discovered candidates in your DB that are already promoting competitors — not yet contacted, sorted by priority
             </p>
             <OverlapTable channels={overlap.channels} aiNote={overlap.ai_note} />
           </div>
