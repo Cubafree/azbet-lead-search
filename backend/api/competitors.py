@@ -8,6 +8,7 @@ GET  /api/competitors/insights     — AI-generated insights
 POST /api/competitors/scan         — trigger background scan job
 """
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -246,7 +247,7 @@ async def _run_scan(pool, job_id: str, geo: str, competitor_name: str | None):
                             comp["name"],
                             f"New affiliate found: @{ch['handle']} ({ch['platform']})",
                             ch.get("geo_focus"),
-                            {"handle": ch["handle"], "followers": ch.get("followers")},
+                            json.dumps({"handle": ch["handle"], "followers": ch.get("followers")}),
                         )
 
                 # Record new promo codes as signals
@@ -264,7 +265,7 @@ async def _run_scan(pool, job_id: str, geo: str, competitor_name: str | None):
                                VALUES ($1, 'new_promo', $2, $3)""",
                             comp["name"],
                             f"Promo code detected: {code}",
-                            {"code": code},
+                            json.dumps({"code": code}),
                         )
 
                 # Check our high/medium leads switching to this competitor
@@ -289,7 +290,7 @@ async def _run_scan(pool, job_id: str, geo: str, competitor_name: str | None):
                         comp["name"],
                         f"Our lead @{ch['handle']} ({ch['platform']}) promotes this competitor",
                         ch["id"],
-                        {"handle": ch["handle"], "platform": ch["platform"]},
+                        json.dumps({"handle": ch["handle"], "platform": ch["platform"]}),
                     )
 
                 # Update competitor aggregate
