@@ -104,6 +104,47 @@ ALTER TABLE channels ADD COLUMN IF NOT EXISTS er_percent FLOAT;    -- engagement
 -- Competitor monitoring: last time we checked their activity
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS last_monitored_at TIMESTAMPTZ;
 
+-- ── Competitor intelligence ────────────────────────────────────────────────
+
+-- Known competitor profiles + rolling metrics
+CREATE TABLE IF NOT EXISTS competitors (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            TEXT NOT NULL UNIQUE,   -- "1xbet", "melbet", …
+    display_name    TEXT,
+    domains         TEXT[],                 -- ["1xbet.com", "1xbet.africa"]
+    affiliate_domain TEXT,                  -- "1xbetpartners.com"
+    promo_prefix    TEXT,                   -- "AZ", "MB", "MSB" — for regex search
+    affiliate_count INT  DEFAULT 0,         -- refreshed each scan
+    last_scanned_at TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Time-series events: new affiliates, new promos, our leads switching, etc.
+CREATE TABLE IF NOT EXISTS competitor_signals (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    competitor_name TEXT NOT NULL,
+    signal_type     TEXT NOT NULL,  -- new_affiliate | new_promo | lead_switched | growth | new_geo
+    description     TEXT,
+    geo             TEXT,
+    channel_id      UUID REFERENCES channels(id) ON DELETE SET NULL,
+    data            JSONB,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_comp_signals_name    ON competitor_signals(competitor_name);
+CREATE INDEX IF NOT EXISTS idx_comp_signals_type    ON competitor_signals(signal_type);
+CREATE INDEX IF NOT EXISTS idx_comp_signals_created ON competitor_signals(created_at DESC);
+
+-- Seed known competitors (idempotent)
+INSERT INTO competitors (name, display_name, domains, affiliate_domain, promo_prefix) VALUES
+  ('1xbet',     '1xBet',     ARRAY['1xbet.com','1xbet.africa'],   '1xbetpartners.com',  'AZ'),
+  ('melbet',    'Melbet',    ARRAY['melbet.com','melbet.africa'],  'melbetpartners.com', 'MB'),
+  ('mostbet',   'Mostbet',   ARRAY['mostbet.com'],                 'mostbet.partners',   'MSB'),
+  ('1win',      '1Win',      ARRAY['1win.com','1win.xyz'],         '1win.partners',      '1W'),
+  ('betwinner', 'BetWinner', ARRAY['betwinner.com'],               'betwinner.partners', 'BW'),
+  ('22bet',     '22Bet',     ARRAY['22bet.com'],                   '22bet.partners',     '22B')
+ON CONFLICT (name) DO NOTHING;
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_channels_platform    ON channels(platform);
 CREATE INDEX IF NOT EXISTS idx_channels_score       ON channels(score DESC NULLS LAST);

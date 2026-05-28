@@ -41,6 +41,17 @@ export const api = {
     method: 'PATCH', body: JSON.stringify({ is_contacted: value }),
   }),
 
+  // Competitors
+  getCompetitors: () => request('/api/competitors'),
+  getCompetitor: (name) => request(`/api/competitors/${name}`),
+  getCompetitorSignals: (name, days = 30) => request(`/api/competitors/${name}/signals?days=${days}`),
+  getCompetitorOverlap: () => request('/api/competitors/overlap'),
+  getCompetitorInsights: () => request('/api/competitors/insights'),
+  scanCompetitors: (geo = 'all', name = null) => request('/api/competitors/scan', {
+    method: 'POST',
+    body: JSON.stringify({ geo, competitor_name: name }),
+  }),
+
   // Monitor
   checkCompetitors: () => request('/api/monitor/competitors', { method: 'POST', body: JSON.stringify({}) }),
   refreshStale: () => request('/api/monitor/refresh-stale', { method: 'POST', body: JSON.stringify({}) }),

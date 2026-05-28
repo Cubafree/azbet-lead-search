@@ -5,6 +5,7 @@ import JobBar from './components/JobBar'
 import Filters from './components/Filters'
 import ChannelTable from './components/ChannelTable'
 import QueryManager from './components/QueryManager'
+import CompetitorDashboard from './components/CompetitorDashboard'
 import { useChannels } from './hooks/useChannels'
 import { useJob } from './hooks/useJob'
 import { api } from './api/client'
@@ -19,6 +20,7 @@ const PHASE_LABEL = {
   qualifying:         '🧠 AI qualifying…',
   deep_enriching:     '🔬 Deep contact search…',
   monitoring:         '🛡 Checking competitors…',
+  competitor_scan:    '🔍 Scanning competitors…',
   refreshing:         '🔄 Refreshing stale leads…',
   done:               '✅ Done',
 }
@@ -169,7 +171,7 @@ export default function App() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-5 border-b border-gray-800">
-          {[['leads', 'Leads'], ['queries', 'Query Manager']].map(([key, label]) => (
+          {[['leads', 'Leads'], ['competitors', '🛡 Competitors'], ['queries', 'Query Manager']].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -200,6 +202,8 @@ export default function App() {
             }
           </>
         )}
+
+        {tab === 'competitors' && <CompetitorDashboard />}
 
         {tab === 'queries' && <QueryManager />}
       </div>

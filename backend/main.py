@@ -14,6 +14,7 @@ from api.queries import router as queries_router
 from api.agent import router as agent_router
 from api.enrich import router as enrich_router
 from api.monitor import router as monitor_router
+from api.competitors import router as competitors_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -40,6 +41,7 @@ app.include_router(queries_router)
 app.include_router(agent_router)
 app.include_router(enrich_router)
 app.include_router(monitor_router)
+app.include_router(competitors_router)
 
 # Отдаём React билд в продакшне
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
