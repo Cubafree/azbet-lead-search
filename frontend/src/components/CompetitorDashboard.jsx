@@ -248,7 +248,7 @@ export default function CompetitorDashboard() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold text-white">Competitor Intelligence</h2>
-          <p className="text-xs text-gray-500 mt-0.5">MENA affiliate activity · promo codes · discovered lead candidates</p>
+          <p className="text-xs text-gray-500 mt-0.5">MENA affiliate activity · promo codes · discovered lead candidates · <span title="6 competitors × 2 geos × 1 lang × 2 query types">24 Serper credits/scan</span></p>
         </div>
         <div className="flex items-center gap-2">
           {scanStatus && <span className="text-xs text-gray-400">{scanStatus}</span>}

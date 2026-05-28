@@ -11,7 +11,10 @@ from scrapers import youtube as yt_scraper
 
 logger = logging.getLogger(__name__)
 
-MENA_GEOS = ["egypt", "morocco", "algeria", "tunisia", "libya"]
+# Default: only top-2 geos to conserve Serper credits (120 → 24 calls per full scan)
+# Full: ["egypt", "morocco", "algeria", "tunisia", "libya"]
+MENA_GEOS = ["egypt", "morocco"]
+SCAN_LANGUAGES = ["en"]   # Arabic adds ~2x calls with minimal extra yield on site:t.me
 
 # Promo code patterns per competitor
 PROMO_PATTERNS = {
@@ -47,7 +50,7 @@ async def scan_competitor(competitor: dict, geo: str = "all") -> dict:
     seen_yt: set[str] = set()
 
     for g in geos:
-        for lang in ["en", "ar"]:
+        for lang in SCAN_LANGUAGES:
             try:
                 # Telegram affiliates
                 tg_query = f'"{name}" promo code site:t.me {g}'
