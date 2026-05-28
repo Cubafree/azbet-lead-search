@@ -2,8 +2,11 @@
 Поиск через Serper API (Google Search).
 Возвращает сырые результаты, парсеры — отдельно.
 """
+import logging
 import httpx
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 SERPER_URL = "https://google.serper.dev/search"
@@ -32,5 +35,11 @@ async def search(query_text: str, source_type: str, geo: str, language: str) -> 
             headers={"X-API-KEY": settings.serper_api_key},
             json=payload,
         )
+        if not resp.is_success:
+            logger.error(
+                "Serper %d for query=%r geo=%s lang=%s type=%s body=%s",
+                resp.status_code, query_text[:80], geo, language, source_type,
+                resp.text[:400],
+            )
         resp.raise_for_status()
         return resp.json()
