@@ -41,6 +41,17 @@ FALLBACK_QUERIES = [
     {"query_text": "north africa betting tipster site:t.me", "geo": "all"},
     {"query_text": "شركاء تسويق كازينو عرب", "geo": "all"},
     {"query_text": "affiliate betting arabic youtube.com/@", "geo": "all"},
+    # Promo code / competitor switcher — Instagram & TikTok
+    {"query_text": "كود خصم 1xbet مصر site:instagram.com", "geo": "egypt"},
+    {"query_text": "كود ميلبيت المغرب site:instagram.com", "geo": "morocco"},
+    {"query_text": "1xbet promo code egypt site:tiktok.com", "geo": "egypt"},
+    {"query_text": "melbet morocco promo code tiktok", "geo": "morocco"},
+    {"query_text": "mostbet algeria promo code site:instagram.com", "geo": "algeria"},
+    {"query_text": "1win tunisia promo code site:instagram.com OR site:tiktok.com", "geo": "tunisia"},
+    {"query_text": "بروموكود رهانات مصر انستغرام", "geo": "egypt"},
+    {"query_text": "كود ترويجي مراهنات المغرب تيك توك", "geo": "morocco"},
+    {"query_text": "betwinner promo code mena site:instagram.com", "geo": "all"},
+    {"query_text": "1xbet melbet mostbet promo code arab instagram tiktok", "geo": "all"},
 ]
 
 _GEO_PROMPT = {
@@ -64,10 +75,13 @@ async def generate_queries(geo: str = "all") -> list[dict]:
 Generate exactly 30 diverse search queries to find:
 - Telegram tipster channels (use site:t.me)
 - YouTube prediction channels (use youtube.com/@)
+- Instagram betting/promo profiles (use site:instagram.com)
+- TikTok betting/promo accounts (use site:tiktok.com)
 - Betting/casino affiliate websites and blogs
-- Promo code review pages
+- Promo code review pages for competitor brands: 1xbet, melbet, mostbet, 1win, betwinner
 
-Mix Arabic and English. Cover: sports predictions, casino reviews, promo codes, betting tips.
+Mix Arabic and English. Cover: sports predictions, casino reviews, promo codes, betting tips,
+competitor brand promo code promoters on Instagram and TikTok in MENA.
 
 Return JSON: {{"queries": [{{"query_text": "...", "geo": "egypt|morocco|algeria|tunisia|libya|all"}}]}}"""
 

@@ -52,3 +52,50 @@ async def enrich_channel(handle: str) -> dict:
         logger.debug("TGStat enrich failed for %s: %s", handle, e)
 
     return result
+
+
+async def get_audience_data(handle: str) -> dict:
+    """
+    Returns audience analytics: er_percent, audience_geo (top country label).
+    Endpoint: GET /channels/stat
+    """
+    if not settings.tgstat_token:
+        return {}
+
+    result: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{_BASE}/channels/stat",
+                params={"token": settings.tgstat_token, "channelId": f"@{handle}"},
+            )
+            if resp.status_code != 200:
+                return {}
+            data = resp.json()
+
+        if data.get("status") != "ok":
+            return {}
+
+        item = data.get("response", {})
+
+        # Engagement rate
+        er = item.get("er") or item.get("err")
+        if er is not None:
+            try:
+                result["er_percent"] = round(float(er), 2)
+            except (TypeError, ValueError):
+                pass
+
+        # Audience geography — pick the top country
+        audience = item.get("audienceGeo") or []
+        if audience and isinstance(audience, list):
+            top = sorted(audience, key=lambda x: x.get("percent", 0), reverse=True)
+            if top:
+                country = top[0].get("country_name") or top[0].get("country_code", "")
+                pct = top[0].get("percent", 0)
+                result["audience_geo"] = f"{country} {pct:.0f}%" if pct else country
+
+    except Exception as e:
+        logger.debug("TGStat audience failed for %s: %s", handle, e)
+
+    return result

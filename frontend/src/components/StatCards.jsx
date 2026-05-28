@@ -21,6 +21,9 @@ export default function StatCards() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       <Card label="Total leads" value={stats.total} />
+      {stats.avg_score != null && (
+        <Card label="Avg score" value={stats.avg_score} valueClass="text-purple-400" />
+      )}
       {stats.by_priority.map(r => (
         <Card
           key={r.priority}

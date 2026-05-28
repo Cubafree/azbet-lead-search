@@ -24,10 +24,14 @@ async def deep_enrich(ch: dict) -> dict:
         r = await telegram_deep.enrich_channel(handle)
         result.update({k: v for k, v in r.items() if v})
 
-        # 2. TGStat — participants_count, about
+        # 2. TGStat — participants_count, about, audience geo, ER
         if not result.get("contact_email"):
             r = await tgstat_api.enrich_channel(handle)
             result.update({k: v for k, v in r.items() if v and k not in result})
+
+        # 3. TGStat audience analytics (er, geo)
+        audience = await tgstat_api.get_audience_data(handle)
+        result.update({k: v for k, v in audience.items() if v and k not in result})
 
     elif platform == "youtube":
         r = await youtube_api.enrich_channel(handle, url)

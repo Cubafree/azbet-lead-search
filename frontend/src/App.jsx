@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, RefreshCw, Zap } from 'lucide-react'
+import { Bot, RefreshCw, Zap, ShieldAlert, RotateCcw, Users } from 'lucide-react'
 import StatCards from './components/StatCards'
 import JobBar from './components/JobBar'
 import Filters from './components/Filters'
@@ -7,6 +7,7 @@ import ChannelTable from './components/ChannelTable'
 import QueryManager from './components/QueryManager'
 import { useChannels } from './hooks/useChannels'
 import { useJob } from './hooks/useJob'
+import { api } from './api/client'
 
 const GEOS = ['all', 'egypt', 'morocco', 'algeria', 'tunisia', 'libya']
 const DEFAULT_FILTERS = { limit: 50, offset: 0 }
@@ -17,6 +18,8 @@ const PHASE_LABEL = {
   enriching:          '⚡ Enriching channels…',
   qualifying:         '🧠 AI qualifying…',
   deep_enriching:     '🔬 Deep contact search…',
+  monitoring:         '🛡 Checking competitors…',
+  refreshing:         '🔄 Refreshing stale leads…',
   done:               '✅ Done',
 }
 
@@ -25,6 +28,7 @@ export default function App() {
   const [tab, setTab] = useState('leads')
   const [agentGeo, setAgentGeo] = useState('all')
 
+  const [monitorStatus, setMonitorStatus] = useState(null)
   const { items, total, loading, refetch } = useChannels(filters)
   const { job, running, triggerAgent } = useJob()
 
@@ -33,6 +37,30 @@ export default function App() {
       await triggerAgent(agentGeo)
     } catch (e) {
       alert(`Failed to start agent: ${e.message}`)
+    }
+  }
+
+  async function handleMonitor(fn, label) {
+    setMonitorStatus(`${label}…`)
+    try {
+      const r = await fn()
+      setMonitorStatus(`✅ Job started: ${r.job_id?.slice(0, 8)}`)
+      setTimeout(() => setMonitorStatus(null), 4000)
+    } catch (e) {
+      setMonitorStatus(`❌ ${e.message}`)
+      setTimeout(() => setMonitorStatus(null), 5000)
+    }
+  }
+
+  async function handleGroupAffiliates() {
+    setMonitorStatus('Grouping…')
+    try {
+      const r = await api.groupAffiliates()
+      setMonitorStatus(`✅ Grouped ${r.grouped_affiliates} affiliates (of ${r.checked} checked)`)
+      setTimeout(() => setMonitorStatus(null), 5000)
+    } catch (e) {
+      setMonitorStatus(`❌ ${e.message}`)
+      setTimeout(() => setMonitorStatus(null), 5000)
     }
   }
 
@@ -107,6 +135,32 @@ export default function App() {
                 <span className="text-red-400 truncate">{job.error_msg}</span>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Monitor toolbar */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="text-xs text-gray-600 mr-1">Tools:</span>
+          <button
+            onClick={() => handleMonitor(api.checkCompetitors, 'Checking competitors')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-orange-400 rounded-lg transition-colors"
+          >
+            <ShieldAlert size={12} /> Competitor check
+          </button>
+          <button
+            onClick={() => handleMonitor(api.refreshStale, 'Refreshing stale leads')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-sky-400 rounded-lg transition-colors"
+          >
+            <RotateCcw size={12} /> Refresh stale (30d)
+          </button>
+          <button
+            onClick={handleGroupAffiliates}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-purple-400 rounded-lg transition-colors"
+          >
+            <Users size={12} /> Group affiliates
+          </button>
+          {monitorStatus && (
+            <span className="text-xs text-gray-400 ml-2">{monitorStatus}</span>
           )}
         </div>
 

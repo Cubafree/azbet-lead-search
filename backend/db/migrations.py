@@ -94,8 +94,19 @@ ALTER TABLE channels ADD COLUMN IF NOT EXISTS is_contacted BOOLEAN NOT NULL DEFA
 -- Дата последнего поста/видео (для фильтра активности)
 ALTER TABLE channels ADD COLUMN IF NOT EXISTS last_post_at TIMESTAMPTZ;
 
+-- Numeric lead score (0-100) replacing high/medium/low
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS score INT DEFAULT NULL;
+
+-- TGStat audience analytics
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS audience_geo TEXT;   -- top geo label e.g. "Egypt 42%"
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS er_percent FLOAT;    -- engagement rate %
+
+-- Competitor monitoring: last time we checked their activity
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS last_monitored_at TIMESTAMPTZ;
+
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_channels_platform    ON channels(platform);
+CREATE INDEX IF NOT EXISTS idx_channels_score       ON channels(score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_channels_priority    ON channels(priority);
 CREATE INDEX IF NOT EXISTS idx_channels_affiliate   ON channels(affiliate_id);
 CREATE INDEX IF NOT EXISTS idx_channels_created     ON channels(created_at DESC);

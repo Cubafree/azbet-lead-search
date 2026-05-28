@@ -10,12 +10,13 @@ from datetime import datetime, timezone
 import asyncpg
 
 from db.pool import get_pool
-from scrapers import serper, telegram, youtube, web
+from scrapers import serper, telegram, youtube, web, instagram, tiktok
 from enrichers import ai_qualify
 from agents.query_generator import generate_queries
 from agents.mena_filter import is_mena_relevant
 from agents.email_drafter import draft_email
 from agents.activity_filter import is_recently_active, fetch_tg_last_post
+from agents.scorer import score_channel, priority_from_score
 from enrichers.pipeline import deep_enrich, discover_cross_platform
 
 logger = logging.getLogger(__name__)
@@ -55,17 +56,17 @@ async def _upsert_channel(pool: asyncpg.Pool, ch: dict) -> bool:
         INSERT INTO channels (
             platform, handle, url, name, description, followers,
             contact_email, contact_telegram, contact_other,
-            language, geo_focus, niche, priority,
+            language, geo_focus, niche, priority, score,
             mentioned_competitors, competitor_promo, ai_summary,
             estimated_monthly_visits, outreach_draft,
             last_post_at, last_scraped_at
         ) VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9,
-            $10, $11, $12, $13,
-            $14, $15, $16,
-            $17, $18,
-            $19, NOW()
+            $10, $11, $12, $13, $14,
+            $15, $16, $17,
+            $18, $19,
+            $20, NOW()
         )
         ON CONFLICT (platform, handle) DO NOTHING
         """,
@@ -73,6 +74,7 @@ async def _upsert_channel(pool: asyncpg.Pool, ch: dict) -> bool:
         ch.get("description"), ch.get("followers"),
         ch.get("contact_email"), ch.get("contact_telegram"), ch.get("contact_other"),
         ch.get("language"), ch.get("geo_focus"), ch.get("niche"), ch.get("priority"),
+        ch.get("score"),
         ch.get("mentioned_competitors"), ch.get("competitor_promo"), ch.get("ai_summary"),
         ch.get("estimated_monthly_visits"), ch.get("outreach_draft"),
         ch.get("last_post_at"),
@@ -107,12 +109,12 @@ async def _execute_job(pool: asyncpg.Pool, job_id: str, queries: list[dict] | No
             )
             queries = [dict(r) for r in rows]
 
-        # Разворачиваем каждый запрос в 3 источника: telegram + youtube + seo
+        # Разворачиваем каждый запрос в 5 источников: telegram + youtube + seo + instagram + tiktok
         expanded: list[dict] = []
         for q in queries:
             geo = q.get("geo", "all")
             text = q["query_text"]
-            for source_type in ["telegram", "youtube", "seo"]:
+            for source_type in ["telegram", "youtube", "seo", "instagram", "tiktok"]:
                 expanded.append({**q, "source_type": source_type, "geo": geo, "query_text": text})
 
         await _update_job(pool, job_id, phase="searching", total=len(expanded))
@@ -133,6 +135,10 @@ async def _execute_job(pool: asyncpg.Pool, job_id: str, queries: list[dict] | No
                         parsed = telegram.parse_serper_results(data, lang, q.get("geo", "all"))
                     elif source_type == "youtube":
                         parsed = youtube.parse_serper_results(data, lang, q.get("geo", "all"))
+                    elif source_type == "instagram":
+                        parsed = instagram.parse_serper_results(data, lang, q.get("geo", "all"))
+                    elif source_type == "tiktok":
+                        parsed = tiktok.parse_serper_results(data, lang, q.get("geo", "all"))
                     else:
                         parsed = web.parse_serper_results(data, lang, q.get("geo", "all"))
 
@@ -176,6 +182,12 @@ async def _execute_job(pool: asyncpg.Pool, job_id: str, queries: list[dict] | No
                 await _update_job(pool, job_id, phase="qualifying")
                 qual = await ai_qualify.qualify(ch)
                 ch.update(qual)
+
+                # Numeric scoring
+                ch["score"] = score_channel(ch)
+                # Keep priority aligned with score
+                if not ch.get("priority"):
+                    ch["priority"] = priority_from_score(ch["score"])
 
                 # Сохраняем
                 inserted = await _upsert_channel(pool, ch)
@@ -244,7 +256,7 @@ async def _execute_autonomous_job(pool, job_id: str, geo: str):
         # 4. Разворачиваем в источники
         expanded: list[dict] = []
         for q in queries:
-            for source_type in ["telegram", "youtube", "seo"]:
+            for source_type in ["telegram", "youtube", "seo", "instagram", "tiktok"]:
                 expanded.append({**q, "source_type": source_type})
 
         await _update_job(pool, job_id, phase="searching", total=len(expanded))
@@ -261,6 +273,10 @@ async def _execute_autonomous_job(pool, job_id: str, geo: str):
                         parsed = telegram.parse_serper_results(data, lang, q.get("geo", geo))
                     elif source_type == "youtube":
                         parsed = youtube.parse_serper_results(data, lang, q.get("geo", geo))
+                    elif source_type == "instagram":
+                        parsed = instagram.parse_serper_results(data, lang, q.get("geo", geo))
+                    elif source_type == "tiktok":
+                        parsed = tiktok.parse_serper_results(data, lang, q.get("geo", geo))
                     else:
                         parsed = web.parse_serper_results(data, lang, q.get("geo", geo))
                     all_channels.extend(parsed)
@@ -307,6 +323,11 @@ async def _execute_autonomous_job(pool, job_id: str, geo: str):
                 await _update_job(pool, job_id, phase="qualifying")
                 qual = await ai_qualify.qualify(ch)
                 ch.update(qual)
+
+                # Numeric scoring
+                ch["score"] = score_channel(ch)
+                if not ch.get("priority"):
+                    ch["priority"] = priority_from_score(ch["score"])
 
                 # MENA check после AI qualify — отсекаем если AI определил не-MENA
                 ai_geo = (ch.get("geo_focus") or "").lower()

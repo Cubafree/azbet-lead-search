@@ -28,6 +28,7 @@ _NON_MENA_RE = re.compile("|".join(_NON_MENA_PATTERNS), re.IGNORECASE)
 _MENA_GEO_VALUES = {"egypt", "morocco", "algeria", "tunisia", "libya", "mena", "arab", "maghreb"}
 _SOCIAL_PLATFORMS = {"telegram", "youtube"}
 _LARGE_THRESHOLD = 5_000
+_TG_MIN_FOLLOWERS = 1_000   # Telegram channels below this are skipped
 
 
 def _blob(channel: dict) -> str:
@@ -45,6 +46,12 @@ def is_mena_relevant(channel: dict) -> bool:
     Return True if channel may be relevant for MENA affiliate outreach.
     Conservative: only reject if there is strong non-MENA evidence.
     """
+    # Telegram channels with known follower count below 1k → reject immediately
+    platform = (channel.get("platform") or "").lower()
+    followers = channel.get("followers") or 0
+    if platform == "telegram" and followers and followers < _TG_MIN_FOLLOWERS:
+        return False
+
     # geo_focus already set to MENA value → immediate pass
     geo_focus = (channel.get("geo_focus") or "").lower().strip()
     if geo_focus in _MENA_GEO_VALUES:

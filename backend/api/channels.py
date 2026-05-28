@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Query
 from db.pool import get_pool
 
@@ -104,6 +105,9 @@ async def stats():
     pool = await get_pool()
     total = await pool.fetchval("SELECT COUNT(*) FROM channels WHERE is_archived = FALSE")
     archived = await pool.fetchval("SELECT COUNT(*) FROM channels WHERE is_archived = TRUE")
+    avg_score = await pool.fetchval(
+        "SELECT ROUND(AVG(score)) FROM channels WHERE is_archived = FALSE AND score IS NOT NULL"
+    )
     by_platform = await pool.fetch(
         "SELECT platform, COUNT(*) as cnt FROM channels WHERE is_archived = FALSE "
         "GROUP BY platform ORDER BY cnt DESC"
@@ -115,6 +119,66 @@ async def stats():
     return {
         "total": total,
         "archived": archived,
+        "avg_score": int(avg_score) if avg_score else None,
         "by_platform": [dict(r) for r in by_platform],
         "by_priority": [dict(r) for r in by_priority],
     }
+
+
+@router.post("/group-affiliates")
+async def group_affiliates():
+    """
+    Group channels by likely affiliate entity using name similarity.
+    Channels sharing the same name root (first significant word) get linked
+    to the same affiliate record (creates affiliates row if needed).
+    Returns count of groupings made.
+    """
+    pool = await get_pool()
+
+    # Fetch all non-archived channels without an affiliate_id
+    rows = await pool.fetch(
+        "SELECT id, name, handle, platform FROM channels "
+        "WHERE is_archived = FALSE AND affiliate_id IS NULL AND name IS NOT NULL"
+    )
+
+    def _key(name: str) -> str:
+        """Normalised key: first two meaningful words, lowercased, no punctuation."""
+        words = re.sub(r"[^\w\s]", "", name.lower()).split()
+        stop = {"the", "a", "an", "of", "de", "le", "la", "el", "al", "tips",
+                "bet", "sport", "channel", "official", "page"}
+        meaningful = [w for w in words if w not in stop and len(w) > 2]
+        return " ".join(meaningful[:2]) if meaningful else name.lower()[:10]
+
+    # Group by key
+    groups: dict[str, list] = {}
+    for r in rows:
+        k = _key(r["name"] or r["handle"])
+        groups.setdefault(k, []).append(dict(r))
+
+    # Only act on groups with 2+ channels (different platforms)
+    grouped = 0
+    for key, channels in groups.items():
+        if len(channels) < 2:
+            continue
+        platforms = {c["platform"] for c in channels}
+        if len(platforms) < 2:
+            continue   # same platform duplicates — skip
+
+        # Create or find affiliate
+        affiliate = await pool.fetchrow(
+            "SELECT id FROM affiliates WHERE name = $1", key
+        )
+        if not affiliate:
+            affiliate = await pool.fetchrow(
+                "INSERT INTO affiliates (name) VALUES ($1) RETURNING id", key
+            )
+        affiliate_id = affiliate["id"]
+
+        ids = [c["id"] for c in channels]
+        await pool.execute(
+            "UPDATE channels SET affiliate_id = $1 WHERE id = ANY($2::uuid[]) AND affiliate_id IS NULL",
+            affiliate_id, ids,
+        )
+        grouped += 1
+
+    return {"grouped_affiliates": grouped, "checked": len(rows)}

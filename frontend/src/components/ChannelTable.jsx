@@ -8,6 +8,19 @@ const PRIORITY_BADGE = {
   low:    'bg-gray-800 text-gray-400 border-gray-700',
 }
 
+function ScoreBadge({ score }) {
+  if (score == null) return null
+  const color =
+    score >= 60 ? 'text-emerald-400' :
+    score >= 35 ? 'text-yellow-400' :
+                  'text-gray-500'
+  return (
+    <span className={`text-xs font-mono font-bold ${color}`} title="Lead score">
+      {score}
+    </span>
+  )
+}
+
 const PLATFORM_ICON = {
   telegram:  '✈️',
   youtube:   '▶️',
@@ -133,6 +146,7 @@ export default function ChannelTable({ items, total, filters, onFilterChange, on
               <span className="text-xs text-gray-400">{ch.niche || '—'}</span>
 
               <div className="flex items-center gap-2">
+                <ScoreBadge score={ch.score} />
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${PRIORITY_BADGE[ch.priority] ?? PRIORITY_BADGE.low}`}>
                   {ch.priority || 'unrated'}
                 </span>
@@ -215,11 +229,18 @@ export default function ChannelTable({ items, total, filters, onFilterChange, on
                   </div>
                 )}
 
-                {/* Traffic estimate (web only) */}
-                {ch.platform === 'web' && ch.estimated_monthly_visits && (
+                {/* TGStat audience analytics */}
+                {(ch.er_percent != null || ch.audience_geo) && (
                   <div>
-                    <p className="text-xs text-gray-500 mb-1">Est. Monthly Traffic</p>
-                    <p className="text-sm text-teal-400 font-medium">{fmt(ch.estimated_monthly_visits)} visits/mo</p>
+                    <p className="text-xs text-gray-500 mb-1">Audience</p>
+                    <div className="flex gap-3 text-xs">
+                      {ch.er_percent != null && (
+                        <span className="text-purple-400">ER {ch.er_percent}%</span>
+                      )}
+                      {ch.audience_geo && (
+                        <span className="text-sky-400">📍 {ch.audience_geo}</span>
+                      )}
+                    </div>
                   </div>
                 )}
 

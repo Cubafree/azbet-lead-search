@@ -41,6 +41,13 @@ export const api = {
     method: 'PATCH', body: JSON.stringify({ is_contacted: value }),
   }),
 
+  // Monitor
+  checkCompetitors: () => request('/api/monitor/competitors', { method: 'POST', body: JSON.stringify({}) }),
+  refreshStale: () => request('/api/monitor/refresh-stale', { method: 'POST', body: JSON.stringify({}) }),
+
+  // Affiliate grouping
+  groupAffiliates: () => request('/api/channels/group-affiliates', { method: 'POST' }),
+
   // Queries
   getQueries: () => request('/api/queries'),
   createQuery: (body) => request('/api/queries', { method: 'POST', body: JSON.stringify(body) }),
